@@ -1,0 +1,7 @@
+.output
+
+# vim
+.*.sw[po]
+
+# Projejct specific
+include/config.h
