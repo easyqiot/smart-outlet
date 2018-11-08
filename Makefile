@@ -22,7 +22,8 @@ GEN_IMAGES= eagle.app.v6.out
 GEN_BINS= eagle.app.v6.bin
 SPECIAL_MKTARGETS=$(APP_MKTARGETS)
 SUBDIRS=    \
-	user 
+	user \
+	easyq
 
 endif # } PDIR
 
@@ -47,7 +48,7 @@ endif
 
 COMPONENTS_eagle.app.v6 = \
 	user/libuser.a  \
-	../easyq-espconn-client/easyq/libeasyq.a 
+	easyq/libeasyq.a 
 
 LINKFLAGS_eagle.app.v6 = \
 	-L../lib        \
@@ -120,7 +121,7 @@ DDEFINES +=				\
 #
 
 INCLUDES := $(INCLUDES) -I $(PDIR)include \
-	-I $(PDIR)../easyq-espconn-client/easyq/include
+	-I $(PDIR)easyq/include
 PDIR := ../$(PDIR)
 sinclude $(PDIR)Makefile
 

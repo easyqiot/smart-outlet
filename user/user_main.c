@@ -18,7 +18,7 @@
 EasyQSession eq;
 ETSTimer status_timer;
 
-static bool sw2_state;
+static bool remote_enabled;
 
 
 void ICACHE_FLASH_ATTR
@@ -47,7 +47,7 @@ easyq_connect_cb(void *arg) {
 
     os_timer_disarm(&status_timer);
     os_timer_setfn(&status_timer, (os_timer_func_t *)status_timer_func, NULL);
-    os_timer_arm(&status_timer, 1000, 1);
+    os_timer_arm(&status_timer, 3000, 1);
 }
 
 
@@ -85,22 +85,20 @@ void wifi_connect_cb(uint8_t status) {
 
 void ICACHE_FLASH_ATTR
 sw2_interrupt() {
-	ETS_GPIO_INTR_DISABLE();
 	uint16_t status;
 	
 	// Clear the interrupt
 	status = GPIO_REG_READ(GPIO_STATUS_ADDRESS);
 	GPIO_REG_WRITE(GPIO_STATUS_W1TC_ADDRESS, status);
 
-	bool level = GPIO_INPUT_GET(SW2_NUM);
-	if (level ^ sw2_state) {
-		sw2_state = level;
-		INFO("\r\nSW2: %s\r\n", level? "ON": "OFF"); 
+	bool enabled = !GPIO_INPUT_GET(SW2_NUM);
+	if (enabled ^ remote_enabled) {
+		ETS_GPIO_INTR_DISABLE();
+		remote_enabled = enabled;
+		INFO("\r\nREMOTE: %s\r\n", enabled? "Enabled": "OFF"); 
+		os_delay_us(300000);
+		ETS_GPIO_INTR_ENABLE();
 	}
-
-	os_delay_us(500000);
-	
-	ETS_GPIO_INTR_ENABLE();
 }
 
 
@@ -110,7 +108,7 @@ void user_init(void)
     os_delay_us(60000);
 
 	PIN_FUNC_SELECT(SW2_MUX, SW2_FUNC);
-	//PIN_PULLUP_DIS(SW2_MUX);
+	PIN_PULLUP_DIS(SW2_MUX);
 	GPIO_DIS_OUTPUT(GPIO_ID_PIN(SW2_NUM));
 	ETS_GPIO_INTR_DISABLE();
 	ETS_GPIO_INTR_ATTACH(sw2_interrupt, NULL);
