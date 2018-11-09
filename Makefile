@@ -120,8 +120,11 @@ DDEFINES +=				\
 # Required for each makefile to inherit from the parent
 #
 
-INCLUDES := $(INCLUDES) -I $(PDIR)include \
-	-I $(PDIR)easyq/include
+INCLUDES := $(INCLUDES) \
+	-I $(PDIR)include \
+	-I $(PDIR)easyq/include \
+	-I $(PDIR)third_party/include
+
 PDIR := ../$(PDIR)
 sinclude $(PDIR)Makefile
 

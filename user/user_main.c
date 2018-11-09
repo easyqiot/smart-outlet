@@ -4,6 +4,7 @@
 #include "gpio.h"
 #include "mem.h"
 #include "user_interface.h"
+#include "mbedtls/base64.h"
 
 // LIB: EasyQ
 #include "easyq.h" 
@@ -20,6 +21,11 @@ ETSTimer status_timer;
 
 static bool remote_enabled;
 
+void ICACHE_FLASH_ATTR
+update_firmware(const char* msg, uint16_t message_len) {
+	
+}
+
 
 void ICACHE_FLASH_ATTR
 status_timer_func() {
@@ -33,26 +39,28 @@ status_timer_func() {
 
 
 void ICACHE_FLASH_ATTR
-easyq_message_cb(void *arg, char *queue, char *msg) {
+update_relay(uint32_t num, const char* msg) {
+	bool on = strcmp(msg, "on") == 0;
+	GPIO_OUTPUT_SET(GPIO_ID_PIN(num), !on);
+}
+
+
+void ICACHE_FLASH_ATTR
+easyq_message_cb(void *arg, const char *queue, const char *msg, 
+		uint16_t message_len) {
 	INFO("EASYQ: Message: %s From: %s\r\n", msg, queue);
 //	if (strcmp(msg, "mem") == 0) {
 //		system_print_meminfo();
 //	}
 //
-	bool on = strcmp(msg, "on") == 0;
 	if (strcmp(queue, RELAY1_QUEUE) == 0) { 
-		GPIO_OUTPUT_SET(GPIO_ID_PIN(RELAY1_NUM), !on);
+		update_relay(RELAY1_NUM, msg);
 	}
 	else if (strcmp(queue, RELAY2_QUEUE) == 0) { 
-		GPIO_OUTPUT_SET(GPIO_ID_PIN(RELAY2_NUM), !on);
+		update_relay(RELAY2_NUM, msg);
 	}	
-	else if (strcmp(queue, "pm") == 0) {
-		if (on) {
-			wifi_fpm_open();
-		} 
-		else {
-			wifi_fpm_close();
-		}
+	else if (strcmp(queue, FOTA_QUEUE) == 0) {
+		update_firmware(msg, message_len)
 	}
 }
 
