@@ -23,10 +23,11 @@ static bool remote_enabled;
 
 void ICACHE_FLASH_ATTR
 status_timer_func() {
-	char str[20];
+	char str[50];
 	float vdd = system_get_vdd33() / 1024.0;
 
-	os_sprintf(str, "VDD: %d.%03d", (int)vdd, (int)(vdd*1000)%1000);
+	os_sprintf(str, "VDD: %d.%03d Remote: %s", (int)vdd, 
+			(int)(vdd*1000)%1000, remote_enabled? "ON": "OFF");
 	easyq_push(&eq, STATUS_QUEUE, str);
 }
 
@@ -34,8 +35,24 @@ status_timer_func() {
 void ICACHE_FLASH_ATTR
 easyq_message_cb(void *arg, char *queue, char *msg) {
 	INFO("EASYQ: Message: %s From: %s\r\n", msg, queue);
-	if (strcmp(msg, "mem") == 0) {
-		system_print_meminfo();
+//	if (strcmp(msg, "mem") == 0) {
+//		system_print_meminfo();
+//	}
+//
+	bool on = strcmp(msg, "on") == 0;
+	if (strcmp(queue, RELAY1_QUEUE) == 0) { 
+		GPIO_OUTPUT_SET(GPIO_ID_PIN(RELAY1_NUM), !on);
+	}
+	else if (strcmp(queue, RELAY2_QUEUE) == 0) { 
+		GPIO_OUTPUT_SET(GPIO_ID_PIN(RELAY2_NUM), !on);
+	}	
+	else if (strcmp(queue, "pm") == 0) {
+		if (on) {
+			wifi_fpm_open();
+		} 
+		else {
+			wifi_fpm_close();
+		}
 	}
 }
 
@@ -43,11 +60,13 @@ easyq_message_cb(void *arg, char *queue, char *msg) {
 void ICACHE_FLASH_ATTR
 easyq_connect_cb(void *arg) {
 	INFO("EASYQ: Connected to %s:%d\r\n", eq.hostname, eq.port);
-	easyq_pull(&eq, COMMAND_QUEUE);
 
     os_timer_disarm(&status_timer);
     os_timer_setfn(&status_timer, (os_timer_func_t *)status_timer_func, NULL);
-    os_timer_arm(&status_timer, 3000, 1);
+    os_timer_arm(&status_timer, 2000, 1);
+	
+	const char * queues[] = {RELAY1_QUEUE, RELAY2_QUEUE, "pm"};
+	easyq_pull_all(&eq, queues, 3);
 }
 
 
@@ -91,11 +110,11 @@ sw2_interrupt() {
 	status = GPIO_REG_READ(GPIO_STATUS_ADDRESS);
 	GPIO_REG_WRITE(GPIO_STATUS_W1TC_ADDRESS, status);
 
-	bool enabled = !GPIO_INPUT_GET(SW2_NUM);
+	bool enabled = !GPIO_INPUT_GET(GPIO_ID_PIN(SW2_NUM));
 	if (enabled ^ remote_enabled) {
 		ETS_GPIO_INTR_DISABLE();
 		remote_enabled = enabled;
-		INFO("\r\nREMOTE: %s\r\n", enabled? "Enabled": "OFF"); 
+		INFO("REMOTE: %s\r\n", enabled? "ON": "OFF"); 
 		os_delay_us(300000);
 		ETS_GPIO_INTR_ENABLE();
 	}
@@ -107,13 +126,22 @@ void user_init(void)
     uart_init(BIT_RATE_115200, BIT_RATE_115200);
     os_delay_us(60000);
 
+	// SW2
 	PIN_FUNC_SELECT(SW2_MUX, SW2_FUNC);
-	PIN_PULLUP_DIS(SW2_MUX);
+	PIN_PULLUP_EN(SW2_MUX);
 	GPIO_DIS_OUTPUT(GPIO_ID_PIN(SW2_NUM));
+
+	// Relays 
+	PIN_FUNC_SELECT(RELAY1_MUX, RELAY1_FUNC);
+	PIN_FUNC_SELECT(RELAY2_MUX, RELAY2_FUNC);
+	GPIO_OUTPUT_SET(GPIO_ID_PIN(RELAY1_NUM), 1);
+	GPIO_OUTPUT_SET(GPIO_ID_PIN(RELAY2_NUM), 1);
+
 	ETS_GPIO_INTR_DISABLE();
 	ETS_GPIO_INTR_ATTACH(sw2_interrupt, NULL);
 	gpio_pin_intr_state_set(GPIO_ID_PIN(SW2_NUM), GPIO_PIN_INTR_ANYEDGE);
 	ETS_GPIO_INTR_ENABLE();
+	sw2_interrupt();
 
 	EasyQError err = easyq_init(&eq, EASYQ_HOSTNAME, EASYQ_PORT, EASYQ_LOGIN);
 	if (err != EASYQ_OK) {
