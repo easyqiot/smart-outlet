@@ -4,7 +4,6 @@
 #include "gpio.h"
 #include "mem.h"
 #include "user_interface.h"
-#include "mbedtls/base64.h"
 
 // LIB: EasyQ
 #include "easyq.h" 
@@ -60,7 +59,7 @@ easyq_message_cb(void *arg, const char *queue, const char *msg,
 		update_relay(RELAY2_NUM, msg);
 	}	
 	else if (strcmp(queue, FOTA_QUEUE) == 0) {
-		update_firmware(msg, message_len)
+		update_firmware(msg, message_len);
 	}
 }
 

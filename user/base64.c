@@ -1,6 +1,7 @@
 
 
-#include "mbedtls/base64.h"
+#include "base64.h"
+#include <c_types.h>
 
 #include <stdint.h>
 #include <stdio.h>
@@ -58,7 +59,7 @@ int mbedtls_base64_encode( unsigned char *dst, size_t dlen, size_t *olen,
     if( n > ( BASE64_SIZE_T_MAX - 1 ) / 4 )
     {
         *olen = BASE64_SIZE_T_MAX;
-        return( MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL );
+        return( EASYQ_ERR_BASE64_BUFFER_TOO_SMALL );
     }
 
     n *= 4;
@@ -66,7 +67,7 @@ int mbedtls_base64_encode( unsigned char *dst, size_t dlen, size_t *olen,
     if( dlen < n + 1 )
     {
         *olen = n + 1;
-        return( MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL );
+        return( EASYQ_ERR_BASE64_BUFFER_TOO_SMALL );
     }
 
     n = ( slen / 3 ) * 3;
@@ -138,16 +139,16 @@ int mbedtls_base64_decode( unsigned char *dst, size_t dlen, size_t *olen,
 
         /* Space inside a line is an error */
         if( x != 0 )
-            return( MBEDTLS_ERR_BASE64_INVALID_CHARACTER );
+            return( EASYQ_ERR_BASE64_INVALID_CHARACTER );
 
         if( src[i] == '=' && ++j > 2 )
-            return( MBEDTLS_ERR_BASE64_INVALID_CHARACTER );
+            return( EASYQ_ERR_BASE64_INVALID_CHARACTER );
 
         if( src[i] > 127 || system_get_data_of_array_8(base64_dec_map, src[i]) == 127 )
-            return( MBEDTLS_ERR_BASE64_INVALID_CHARACTER );
+            return( EASYQ_ERR_BASE64_INVALID_CHARACTER );
 
         if( system_get_data_of_array_8(base64_dec_map, src[i]) < 64 && j != 0 )
-            return( MBEDTLS_ERR_BASE64_INVALID_CHARACTER );
+            return( EASYQ_ERR_BASE64_INVALID_CHARACTER );
 
         n++;
     }
@@ -164,7 +165,7 @@ int mbedtls_base64_decode( unsigned char *dst, size_t dlen, size_t *olen,
     if( dst == NULL || dlen < n )
     {
         *olen = n;
-        return( MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL );
+        return( EASYQ_ERR_BASE64_BUFFER_TOO_SMALL );
     }
 
    for( j = 3, n = x = 0, p = dst; i > 0; i--, src++ )
