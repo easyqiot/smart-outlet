@@ -93,7 +93,7 @@ void wifi_connect_cb(uint8_t status) {
     if(status == STATION_GOT_IP) {
         easyq_connect(&eq);
     } else {
-        easyq_disconnect(&eq);
+        //easyq_disconnect(&eq);
     }
 }
 
