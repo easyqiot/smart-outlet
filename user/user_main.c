@@ -81,19 +81,19 @@ LOCAL bool remote_enabled;
 //}
 //
 //
-//void easyq_disconnect_cb(void *arg)
-//{
-//	EasyQSession *e = (EasyQSession*) arg;
-//    os_timer_disarm(&status_timer);
-//	INFO("EASYQ: Disconnected from %s:%d\r\n", e->hostname, e->port);
-//}
+void easyq_disconnect_cb(void *arg)
+{
+	EasyQSession *e = (EasyQSession*) arg;
+    os_timer_disarm(&status_timer);
+	INFO("EASYQ: Disconnected from %s:%d\r\n", e->hostname, e->port);
+}
 
 
 void wifi_connect_cb(uint8_t status) {
     if(status == STATION_GOT_IP) {
         easyq_connect(&eq);
     } else {
-        //easyq_disconnect(&eq);
+        easyq_disconnect(&eq);
     }
 }
 
