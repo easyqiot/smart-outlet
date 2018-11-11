@@ -15,93 +15,83 @@
 #include "config.h"
 
 
-EasyQSession eq;
+LOCAL EasyQSession eq;
 ETSTimer status_timer;
+LOCAL bool remote_enabled;
 
-static bool remote_enabled;
-
-void ICACHE_FLASH_ATTR
-update_firmware(const char* msg, uint16_t message_len) {
-	
-}
-
-
-void ICACHE_FLASH_ATTR
-status_timer_func() {
-	char str[50];
-	float vdd = system_get_vdd33() / 1024.0;
-
-	os_sprintf(str, "VDD: %d.%03d Remote: %s", (int)vdd, 
-			(int)(vdd*1000)%1000, remote_enabled? "ON": "OFF");
-	easyq_push(&eq, STATUS_QUEUE, str);
-}
-
-
-void ICACHE_FLASH_ATTR
-update_relay(uint32_t num, const char* msg) {
-	bool on = strcmp(msg, "on") == 0;
-	GPIO_OUTPUT_SET(GPIO_ID_PIN(num), !on);
-}
-
-
-void ICACHE_FLASH_ATTR
-easyq_message_cb(void *arg, const char *queue, const char *msg, 
-		uint16_t message_len) {
-	INFO("EASYQ: Message: %s From: %s\r\n", msg, queue);
-//	if (strcmp(msg, "mem") == 0) {
-//		system_print_meminfo();
-//	}
+//void ICACHE_FLASH_ATTR
+//update_firmware(const char* msg, uint16_t message_len) {
+//	
+//}
 //
-	if (strcmp(queue, RELAY1_QUEUE) == 0) { 
-		update_relay(RELAY1_NUM, msg);
-	}
-	else if (strcmp(queue, RELAY2_QUEUE) == 0) { 
-		update_relay(RELAY2_NUM, msg);
-	}	
-	else if (strcmp(queue, FOTA_QUEUE) == 0) {
-		update_firmware(msg, message_len);
-	}
-}
-
-
-void ICACHE_FLASH_ATTR
-easyq_connect_cb(void *arg) {
-	INFO("EASYQ: Connected to %s:%d\r\n", eq.hostname, eq.port);
-
-    os_timer_disarm(&status_timer);
-    os_timer_setfn(&status_timer, (os_timer_func_t *)status_timer_func, NULL);
-    os_timer_arm(&status_timer, 2000, 1);
-	
-	const char * queues[] = {RELAY1_QUEUE, RELAY2_QUEUE, "pm"};
-	easyq_pull_all(&eq, queues, 3);
-}
-
-
-void ICACHE_FLASH_ATTR
-easyq_connection_error_cb(void *arg) {
-	EasyQSession *e = (EasyQSession*) arg;
-    os_timer_disarm(&status_timer);
-	INFO("EASYQ: Connection error: %s:%d\r\n", e->hostname, e->port);
-	INFO("EASYQ: Reconnecting to %s:%d\r\n", e->hostname, e->port);
-}
-
-
-void easyq_disconnect_cb(void *arg)
-{
-	EasyQSession *e = (EasyQSession*) arg;
-    os_timer_disarm(&status_timer);
-	INFO("EASYQ: Disconnected from %s:%d\r\n", e->hostname, e->port);
-}
+//
+//void ICACHE_FLASH_ATTR
+//status_timer_func() {
+//	char str[50];
+//	float vdd = system_get_vdd33() / 1024.0;
+//
+//	os_sprintf(str, "VDD: %d.%03d Remote: %s", (int)vdd, 
+//			(int)(vdd*1000)%1000, remote_enabled? "ON": "OFF");
+//	easyq_push(&eq, STATUS_QUEUE, str);
+//}
+//
+//
+//void ICACHE_FLASH_ATTR
+//update_relay(uint32_t num, const char* msg) {
+//	bool on = strcmp(msg, "on") == 0;
+//	GPIO_OUTPUT_SET(GPIO_ID_PIN(num), !on);
+//}
+//
+//
+//void ICACHE_FLASH_ATTR
+//easyq_message_cb(void *arg, const char *queue, const char *msg, 
+//		uint16_t message_len) {
+//	INFO("EASYQ: Message: %s From: %s\r\n", msg, queue);
+//	if (strcmp(queue, RELAY1_QUEUE) == 0) { 
+//		update_relay(RELAY1_NUM, msg);
+//	}
+//	else if (strcmp(queue, RELAY2_QUEUE) == 0) { 
+//		update_relay(RELAY2_NUM, msg);
+//	}	
+//	else if (strcmp(queue, FOTA_QUEUE) == 0) {
+//		update_firmware(msg, message_len);
+//	}
+//}
+//
+//
+//void ICACHE_FLASH_ATTR
+//easyq_connect_cb(void *arg) {
+//	INFO("EASYQ: Connected to %s:%d\r\n", eq.hostname, eq.port);
+//
+//    os_timer_disarm(&status_timer);
+//    os_timer_setfn(&status_timer, (os_timer_func_t *)status_timer_func, NULL);
+//    os_timer_arm(&status_timer, 2000, 1);
+//	
+//	const char * queues[] = {RELAY1_QUEUE, RELAY2_QUEUE, "pm"};
+//	easyq_pull_all(&eq, queues, 3);
+//}
+//
+//
+//void ICACHE_FLASH_ATTR
+//easyq_connection_error_cb(void *arg) {
+//	EasyQSession *e = (EasyQSession*) arg;
+//    os_timer_disarm(&status_timer);
+//	INFO("EASYQ: Connection error: %s:%d\r\n", e->hostname, e->port);
+//	INFO("EASYQ: Reconnecting to %s:%d\r\n", e->hostname, e->port);
+//}
+//
+//
+//void easyq_disconnect_cb(void *arg)
+//{
+//	EasyQSession *e = (EasyQSession*) arg;
+//    os_timer_disarm(&status_timer);
+//	INFO("EASYQ: Disconnected from %s:%d\r\n", e->hostname, e->port);
+//}
 
 
 void wifi_connect_cb(uint8_t status) {
-	EasyQError err;
     if(status == STATION_GOT_IP) {
-        err = easyq_connect(&eq);
-		if (err != EASYQ_OK) {
-			ERROR("EASYQ CONNECT ERROR: %d\r\n", err);
-			easyq_disconnect(&eq);
-		}
+        easyq_connect(&eq);
     } else {
         easyq_disconnect(&eq);
     }
@@ -128,8 +118,7 @@ sw2_interrupt() {
 }
 
 
-void user_init(void)
-{
+void user_init(void) {
     uart_init(BIT_RATE_115200, BIT_RATE_115200);
     os_delay_us(60000);
 
@@ -155,10 +144,10 @@ void user_init(void)
 		ERROR("EASYQ INIT ERROR: %d\r\n", err);
 		return;
 	}
-    eq.onconnect = easyq_connect_cb;
-    eq.ondisconnect = easyq_disconnect_cb;
-	eq.onconnectionerror = easyq_connection_error_cb;
-	eq.onmessage = easyq_message_cb;
+    //eq.onconnect = easyq_connect_cb;
+    //eq.ondisconnect = easyq_disconnect_cb;
+	//eq.onconnectionerror = easyq_connection_error_cb;
+	//eq.onmessage = easyq_message_cb;
 
     WIFI_Connect(WIFI_SSID, WIFI_PSK, wifi_connect_cb);
     INFO("System started ...\r\n");
