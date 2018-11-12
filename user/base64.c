@@ -41,7 +41,7 @@ static const unsigned char base64_dec_map[128] ICACHE_RODATA_ATTR =
 /*
  * Encode a buffer into base64 format
  */
-int mbedtls_base64_encode( unsigned char *dst, size_t dlen, size_t *olen,
+int easyq_base64_encode( unsigned char *dst, size_t dlen, size_t *olen,
                    const unsigned char *src, size_t slen )
 {
     size_t i, n;
@@ -108,7 +108,7 @@ int mbedtls_base64_encode( unsigned char *dst, size_t dlen, size_t *olen,
 /*
  * Decode a base64-formatted buffer
  */
-int mbedtls_base64_decode( unsigned char *dst, size_t dlen, size_t *olen,
+int easyq_base64_decode( unsigned char *dst, size_t dlen, size_t *olen,
                    const unsigned char *src, size_t slen )
 {
     size_t i, n;

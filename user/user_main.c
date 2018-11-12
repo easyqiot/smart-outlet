@@ -15,13 +15,20 @@
 #include "config.h"
 
 
+#define STATUS_INTERVAL 3000
+
+
 LOCAL EasyQSession eq;
 ETSTimer status_timer;
 LOCAL bool remote_enabled;
 
 void ICACHE_FLASH_ATTR
 update_firmware(const char* msg, uint16_t message_len) {
-	
+	unsigned char data[1024];
+	size_t olen;
+	easyq_base64_decode(data, 1024, &olen, msg, message_len);
+	data[olen] = 0;
+	INFO("BASE64: %s\r\n", data);
 }
 
 
@@ -64,10 +71,10 @@ easyq_connect_cb(void *arg) {
 
     os_timer_disarm(&status_timer);
     os_timer_setfn(&status_timer, (os_timer_func_t *)status_timer_func, NULL);
-    os_timer_arm(&status_timer, 2000, 1);
+    os_timer_arm(&status_timer, STATUS_INTERVAL, 1);
 	
-	const char * queues[] = {RELAY1_QUEUE, RELAY2_QUEUE, "pm"};
-	easyq_pull_all(&eq, queues, 3);
+	const char * queues[] = {RELAY1_QUEUE, RELAY2_QUEUE, FOTA_QUEUE, "m"};
+	easyq_pull_all(&eq, queues, 4);
 }
 
 
