@@ -1,18 +1,18 @@
-// SDK
-#include "ets_sys.h"
-#include "osapi.h"
-#include "gpio.h"
-#include "mem.h"
-#include "user_interface.h"
-
-// LIB: EasyQ
-#include "easyq.h" 
-#include "debug.h"
 
 // Internal 
 #include "partition.h"
 #include "wifi.h"
 #include "config.h"
+
+// SDK
+#include <ets_sys.h>
+#include <osapi.h>
+#include <gpio.h>
+#include <mem.h>
+
+// LIB: EasyQ
+#include "easyq.h" 
+#include "debug.h"
 
 
 #define STATUS_INTERVAL 3000
@@ -22,21 +22,16 @@ LOCAL EasyQSession eq;
 ETSTimer status_timer;
 LOCAL bool remote_enabled;
 
-void ICACHE_FLASH_ATTR
-update_firmware(const char* msg, uint16_t message_len) {
-	unsigned char data[1024];
-	size_t olen;
-	easyq_base64_decode(data, 1024, &olen, msg, message_len);
-	data[olen] = 0;
-	INFO("BASE64: %s\r\n", data);
-}
-
 
 void ICACHE_FLASH_ATTR
 status_timer_func() {
 	char str[50];
 	float vdd = system_get_vdd33() / 1024.0;
-	os_sprintf(str, "VDD: %d.%03d Remote: %s", (int)vdd, 
+
+	uint8 image = system_upgrade_userbin_check();
+	os_sprintf(str, "Image: %s, VDD: %d.%03d Remote: %s", 
+			(UPGRADE_FW_BIN1 == image)? "user1": "user2",
+			(int)vdd, 
 			(int)(vdd*1000)%1000, remote_enabled? "ON": "OFF");
 	easyq_push(&eq, STATUS_QUEUE, str);
 }

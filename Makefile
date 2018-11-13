@@ -139,3 +139,6 @@ flash:
 		0xfc000 ../bin/esp_init_data_default_v08_vdd33.bin \
 		0xfe000 ../bin/blank.bin
 
+flash_user2:
+	 $(ESPTOOL) 0x81000 ../bin/upgrade/user2.1024.new.2.bin
+
