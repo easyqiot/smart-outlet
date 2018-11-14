@@ -47,7 +47,7 @@ update_relay(uint32_t num, const char* msg) {
 void ICACHE_FLASH_ATTR
 easyq_message_cb(void *arg, const char *queue, const char *msg, 
 		uint16_t message_len) {
-	INFO("EASYQ: Message: %s From: %s\r\n", msg, queue);
+	//INFO("EASYQ: Message: %s From: %s\r\n", msg, queue);
 	if (strcmp(queue, RELAY1_QUEUE) == 0) { 
 		update_relay(RELAY1_NUM, msg);
 	}
@@ -55,6 +55,7 @@ easyq_message_cb(void *arg, const char *queue, const char *msg,
 		update_relay(RELAY2_NUM, msg);
 	}	
 	else if (strcmp(queue, FOTA_QUEUE) == 0) {
+		os_timer_disarm(&status_timer);
 		update_firmware(msg, message_len);
 	}
 }
