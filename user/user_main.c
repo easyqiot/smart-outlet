@@ -54,9 +54,11 @@ easyq_message_cb(void *arg, const char *queue, const char *msg,
 	else if (strcmp(queue, RELAY2_QUEUE) == 0) { 
 		update_relay(RELAY2_NUM, msg);
 	}	
-	else if (strcmp(queue, FOTA_QUEUE) == 0) {
+	else if (strcmp(queue, FOTA_QUEUE) == 0 && msg[0] == 'S') {
 		os_timer_disarm(&status_timer);
-		update_firmware(msg, message_len);
+		ETS_GPIO_INTR_DISABLE();
+		// TODO: decide about delete easyq ?
+		update_firmware(msg+1, message_len-1);
 	}
 }
 
@@ -69,7 +71,7 @@ easyq_connect_cb(void *arg) {
     os_timer_setfn(&status_timer, (os_timer_func_t *)status_timer_func, NULL);
     os_timer_arm(&status_timer, STATUS_INTERVAL, 1);
 	
-	const char * queues[] = {RELAY1_QUEUE, RELAY2_QUEUE, FOTA_QUEUE, "m"};
+	const char * queues[] = {RELAY1_QUEUE, RELAY2_QUEUE, FOTA_QUEUE};
 	easyq_pull_all(&eq, queues, 4);
 }
 

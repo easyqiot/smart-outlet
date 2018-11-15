@@ -1,17 +1,26 @@
 #! /usr/bin/env python3.6
 
+import re
 import sys
 import time
 import struct
 import base64
 import socket
+import asyncio
 import argparse
+import functools
+
+import aiofiles
+from easyq import client as easyqclient
 
 
 __version__ = '0.1.0a'
 
 
-if sys.argv[1] == '-V':
+DEFAULT_BIND_ADDRESS = '0.0.0.0:6666'
+
+
+if len(sys.argv) > 1 and sys.argv[1] == '-V':
     print(__version__)
     sys.exit(0)
 
@@ -24,64 +33,141 @@ cli.add_argument('filename', help='Input file to download to device')
 cli.add_argument('queue', help='Queue name')
 cli.add_argument(
     'host',
-    metavar='{HOST:}PORT',
+    metavar='{EASYQHOST:}PORT',
     help='EasyQ server Address'
 )
 cli.add_argument('-V', '--version', action='store_true', help='Show version')
 cli.add_argument(
-    '-c', '--chunk-size',
-    default=512,
-    type=int,
-    help='Show version'
+    '-b', '--bind',
+    metavar='{HOST:}PORT',
+    default=DEFAULT_BIND_ADDRESS,
+    help='Bind Address. if ommited the value from the config file will be used'
+         'The default config value is: %s' % DEFAULT_BIND_ADDRESS
 )
+
+
 args = cli.parse_args()
 
-def push(s, d):
-    s.sendall(b'PUSH %s INTO %s;\n' % (d, args.queue.encode()))
+
+class ServerProtocol(asyncio.Protocol):
+    transport = None
+    chunk = None
+    peername = None
+    file = None
+    filectx = None
+
+    class Patterns:
+        regex = functools.partial(re.compile, flags=re.DOTALL + re.IGNORECASE)
+        get = regex(
+            b'^GET (?P<address>[0-9a-fx]+):(?P<length>[0-9a-fA-Fx]+)$'
+        )
+
+    def connection_made(self, transport):
+        self.peername = transport.get_extra_info('peername')
+        print(f'Connection from {self.peername}')
+        self.transport = transport
+
+    def connection_lost(self, exc):
+        print(f'Connection lost: {self.peername}')
+
+    def eof_received(self):
+        print(f'EOF Received: {self.peername}')
+        self.transport.close()
+
+    def data_received(self, data):
+        print(f'Data received: {data.strip()}')
+        if self.chunk:
+            data = self.chunk + data
+
+        # Splitting the received data with \n and adding buffered chunk if available
+        lines = data.split(b';')
+
+        # Adding unterminated command into buffer (if available) to be completed with the next call
+        if not lines[-1].endswith(b';'):
+            self.chunk = lines.pop()
+
+        # Exiting if there is no command to process
+        if not lines:
+            return
+
+        for command in lines:
+            command = command.strip()
+            if command:
+                asyncio.ensure_future(self.process_command(command))
+
+    async def process_command(self, command):
+        m = self.Patterns.get.match(command)
+        if m is not None:
+            return await self.get(**m.groupdict())
+
+        print(f'Invalid command: {command}')
+        self.transport.write(b'ERROR: Invalid command: %s;\n' % command)
+
+    async def get(self, address, length):
+        address = eval(address)
+        length = eval(length)
+        print(f'GET {address}:{length}')
+        data = await self.read_file(address, length)
+        datalen = len(data)
+        data = data + struct.pack('<H', datalen)
+        self.transport.write(data)
+
+    async def read_file(self, address, length):
+        if self.file is None:
+            self.filectx = aiofiles.open(args.filename, mode='rb')
+            self.file = await self.filectx.__aenter__()
+
+        await self.file.seek(address)
+        return await self.file.read(length)
 
 
-def main():
-    host, port = args.host.split(':') if ':' in args.host else ('', args.host)
-    host = socket.gethostbyname(host)
-    port = int(port)
-    total = 0
-    ticks = 0
-    with open(args.filename, 'rb') as f, \
-            socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.connect((host, port))
-        s.sendall(b'LOGIN fota;\n')
-        session = s.recv(20)
-        print('Server: ', session)
+class Server:
+    _server = None
 
-        push(s, b'S')
-        time.sleep(.1)
-        while True:
-            chunk = f.read(args.chunk_size)
-            if not chunk:
-                break
+    def __init__(self, bind=None, loop=None):
+        self.loop = loop or asyncio.get_event_loop()
 
-            size = len(chunk)
-            total += size
-            header = struct.pack('<H', size)
-            chunk = base64.encodebytes(header + chunk)
-            push(s, b'D' + chunk)
-            if (ticks % 8 == 7):
-                print(' %d:%x' % (ticks//8,  total))
-                time.sleep(.7)
-            else:
-                print('.', end='', flush=True)
-                time.sleep(.15)
+        # Host and Port to listen
+        self.host, self.port = bind.split(':') if ':' in bind else ('', bind)
 
-            if size < args.chunk_size:
-                break
-            ticks += 1
+    async def start(self):
+        self._server = await self.loop.create_server(
+            ServerProtocol, self.host, self.port
+        )
 
-        time.sleep(1)
-        push(s, b'F')
-        print('\nDone, total: %d' % total)
-    return 0
+    async def close(self):
+        self._server.close()
+        await self._server.wait_closed()
+
+    @property
+    def address(self):
+        return self._server.sockets[0].getsockname()
+
+
+async def main(loop):
+    s = Server(args.bind, loop)
+    await s.start()
+
+    queue = args.queue.encode()
+    host = args.host
+    host, port = host.split(':') if ':' in host else ('', host)
+    host, port = socket.gethostbyname(host), int(port)
+    c = await easyqclient.connect('fota.py', host, port, loop=loop)
+
+    finish_future = asyncio.Future()
+    async def finish(q, m):
+        print('MSG: ', m)
+        if m == b'F':
+            await s.close()
+            finish_future.set_result(True)
+
+    await c.push(queue, b'S%b' % args.bind.encode())
+    await c.pull(queue, finish)
+    await finish_future
 
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main(loop))
+
