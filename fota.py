@@ -47,6 +47,7 @@ cli.add_argument(
 
 
 args = cli.parse_args()
+finish_future = asyncio.Future()
 
 
 class ServerProtocol(asyncio.Protocol):
@@ -69,6 +70,7 @@ class ServerProtocol(asyncio.Protocol):
 
     def connection_lost(self, exc):
         print(f'Connection lost: {self.peername}')
+        finish_future.set_result(True)
 
     def eof_received(self):
         print(f'EOF Received: {self.peername}')
@@ -106,10 +108,9 @@ class ServerProtocol(asyncio.Protocol):
     async def get(self, address, length):
         address = eval(address)
         length = eval(length)
-        print(f'GET {address}:{length}')
         data = await self.read_file(address, length)
         datalen = len(data)
-        data = data + struct.pack('<H', datalen)
+        data = struct.pack('<H', datalen) + data
         self.transport.write(data)
 
     async def read_file(self, address, length):
@@ -152,17 +153,11 @@ async def main(loop):
     host = args.host
     host, port = host.split(':') if ':' in host else ('', host)
     host, port = socket.gethostbyname(host), int(port)
+
+    await asyncio.sleep(1);
     c = await easyqclient.connect('fota.py', host, port, loop=loop)
 
-    finish_future = asyncio.Future()
-    async def finish(q, m):
-        print('MSG: ', m)
-        if m == b'F':
-            await s.close()
-            finish_future.set_result(True)
-
     await c.push(queue, b'S%b' % args.bind.encode())
-    await c.pull(queue, finish)
     await finish_future
 
 
