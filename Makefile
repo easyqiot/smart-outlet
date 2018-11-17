@@ -128,7 +128,7 @@ INCLUDES := $(INCLUDES) \
 PDIR := ../$(PDIR)
 sinclude $(PDIR)Makefile
 
-.PHONY: flash
+.PHONY: flash flash_user2 fota
 
 ESPTOOL = esptool.py --baud 576000 write_flash --flash_size 1MB --flash_mode qio --flash_freq 40m
 flash:
@@ -141,4 +141,9 @@ flash:
 
 flash_user2:
 	 $(ESPTOOL) 0x81000 ../bin/upgrade/user2.1024.new.2.bin
+
+fota: 
+	python3.6 fota.py \
+		../bin/upgrade/user2.1024.new.2.bin bee:fota ha:1085 \
+		-b 192.168.8.214:6666
 

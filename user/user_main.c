@@ -28,9 +28,11 @@ status_timer_func() {
 	char str[50];
 	float vdd = system_get_vdd33() / 1024.0;
 
-	uint8 image = system_upgrade_userbin_check();
-	os_sprintf(str, "Image: %s, VDD: %d.%03d Remote: %s", 
+	uint32_t userbin_addr = system_get_userbin_addr();
+	uint8_t image = system_upgrade_userbin_check();
+	os_sprintf(str, "Image: %s:0x%05X, VDD: %d.%03d Remote: %s", 
 			(UPGRADE_FW_BIN1 == image)? "user1": "user2",
+			userbin_addr,
 			(int)vdd, 
 			(int)(vdd*1000)%1000, remote_enabled? "ON": "OFF");
 	easyq_push(&eq, STATUS_QUEUE, str);
@@ -48,6 +50,7 @@ void ICACHE_FLASH_ATTR
 easyq_message_cb(void *arg, const char *queue, const char *msg, 
 		uint16_t message_len) {
 	//INFO("EASYQ: Message: %s From: %s\r\n", msg, queue);
+
 	if (strcmp(queue, RELAY1_QUEUE) == 0) { 
 		update_relay(RELAY1_NUM, msg);
 	}
@@ -56,7 +59,6 @@ easyq_message_cb(void *arg, const char *queue, const char *msg,
 	}	
 	else if (strcmp(queue, FOTA_QUEUE) == 0 && msg[0] == 'S') {
 		os_timer_disarm(&status_timer);
-		ETS_GPIO_INTR_DISABLE();
 		// TODO: decide about delete easyq ?
 		easyq_disconnect(&eq);
 		fota_init(msg+1, message_len-1);
@@ -67,9 +69,7 @@ easyq_message_cb(void *arg, const char *queue, const char *msg,
 void ICACHE_FLASH_ATTR
 easyq_connect_cb(void *arg) {
 	INFO("EASYQ: Connected to %s:%d\r\n", eq.hostname, eq.port);
-	INFO("\r\n************** PERFECT BRO ****\r\n");
-	INFO("\r\n************** PERFECT BRO ****\r\n");
-	INFO("\r\n************** PERFECT BRO ****\r\n");
+	INFO("\r\n***** OTA ****\r\n");
     os_timer_disarm(&status_timer);
     os_timer_setfn(&status_timer, (os_timer_func_t *)status_timer_func, NULL);
     os_timer_arm(&status_timer, STATUS_INTERVAL, 1);

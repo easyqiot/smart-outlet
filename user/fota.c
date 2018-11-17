@@ -37,6 +37,7 @@ struct fota_session {
 	size_t recvbuffer_length;
 	uint16_t sector;
 	uint16_t chunk_index;
+	bool ok;
 };
 // HEADER END
 
@@ -59,19 +60,25 @@ _fota_proto_delete() {
 
 LOCAL void 
 _fota_write_sector() {
-	//INFO("W: 0x%05X\r\n", fs.sector * FOTA_SECTOR_SIZE);
+	INFO("W: 0x%05X\r\n", fs.sector * FOTA_SECTOR_SIZE);
 	SpiFlashOpResult err;
+	
+	system_soft_wdt_feed();
 	err = spi_flash_erase_sector(fs.sector);
 	if (err != SPI_FLASH_RESULT_OK) {
 		ERROR("Canot erase flash: %d\r\n", err);
 		return;
 	}
-	err = spi_flash_write(fs.sector * FOTA_SECTOR_SIZE, (uint32_t*)fs.recv_buffer, 
-				FOTA_SECTOR_SIZE);
+	system_soft_wdt_feed();
+	err = spi_flash_write(fs.sector * FOTA_SECTOR_SIZE, 
+			(uint32_t *)fs.recv_buffer, 
+			FOTA_SECTOR_SIZE);
 	if (err != SPI_FLASH_RESULT_OK) {
 		ERROR("Canot write flash: %d\r\n", err);
 		return;
 	}
+
+	system_soft_wdt_feed();
 	os_memset(fs.recv_buffer, 0, FOTA_SECTOR_SIZE);
 }
 
@@ -106,11 +113,11 @@ _fota_proto_recv_cb(void *arg, char *pdata, unsigned short len) {
 	fs.chunk_index++;
 	uint8_t ss = fs.chunk_index % FOTA_CHUNKS_PER_SECTOR;
 	if (ss == 0 || clen < FOTA_CHUNK_SIZE) { 
-		ERROR("Writing sector: 0x%2X\r\n", fs.sector);
 		_fota_write_sector();
 		fs.sector++;
 		if (clen < FOTA_CHUNK_SIZE) {
-			//INFO("FOTA: Download done\r\n");
+			INFO("FOTA: Last chunk\r\n");
+			fs.ok = true;
 			espconn_disconnect(fs.tcpconn);
 			return;
 		}
@@ -140,6 +147,10 @@ void
 _fota_proto_disconnect_cb(void *arg) {
 	_fota_proto_delete();
 	INFO("FOTA: Successfully disconnected\r\n");
+	if (!fs.ok) {
+		INFO("FOTA Failed\r\n");
+		return;
+	}
 	INFO("FOTA: finish\r\n");
 	system_upgrade_flag_set(UPGRADE_FLAG_FINISH);
 	INFO("REBOOTING\r\n");
@@ -152,7 +163,6 @@ _fota_proto_connect_cb(void *arg) {
 	espconn_regist_recvcb(fs.tcpconn, _fota_proto_recv_cb);
 	//espconn_regist_sentcb(fs.tcpconn, _fota_proto_sent_cb);
 	espconn_regist_disconcb(fs.tcpconn, _fota_proto_disconnect_cb);
-	
 	INFO("FOTA: Connected\r\n");
 	system_upgrade_flag_set(UPGRADE_FLAG_START);
 	fs.chunk_index = 0;
@@ -217,16 +227,19 @@ fota_init(const char* server, uint16_t server_len) {
 	colon[0] = 0;	
 	fs.sector = system_upgrade_userbin_check() == UPGRADE_FW_BIN1 ?
 		SYSTEM_PARTITION_OTA2_ADDR / FOTA_SECTOR_SIZE: 0x1;
+
 	//system_soft_wdt_stop();
-	bool fp = spi_flash_erase_protect_disable();
-	if (!fp) {
-		INFO("Cannot disable the flash protection\r\n");
-		return;
-	}
-	INFO("Flash protect disabled\r\n");
+	//wifi_fpm_close();
+	//bool fp = spi_flash_erase_protect_disable();
+	//if (!fp) {
+	//	INFO("Cannot disable the flash protection\r\n");
+	//	return;
+	//}
+	//INFO("Flash protect disabled\r\n");
 
 	INFO("FOTA: Start: %s:%d Sector: %X\r\n", server, port, fs.sector);
 	fs.server = (char *)os_zalloc(server_len + 1);
+	fs.ok = false;
 	os_strcpy(fs.server, server);
 	fs.server[server_len] = 0;
 
