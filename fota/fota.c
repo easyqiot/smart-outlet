@@ -13,8 +13,7 @@
 
 LOCAL struct fota_session fs;
 
-// FIXME: May be static
-os_event_t fota_task_queue[FOTA_TASK_QUEUE_SIZE];
+LOCAL os_event_t fota_task_queue[FOTA_TASK_QUEUE_SIZE];
 
 
 void
@@ -24,24 +23,20 @@ _fota_task_post(enum fota_signal signal) {
 
 
 LOCAL void 
-_fota_erase_sector() {
-	INFO("E: 0x%05X\r\n", fs.sector * FOTA_SECTOR_SIZE);
+_fota_write_sector() {
 	SpiFlashOpResult err;
-	
-	err = spi_flash_erase_sector(fs.sector);
+
+	INFO("E: 0x%05X\r\n", fs.sector * FOTA_SECTOR_SIZE);
+	system_soft_wdt_feed();
+	err = spi_flash_erase_sector((uint16_t)fs.sector);
 	if (err != SPI_FLASH_RESULT_OK) {
 		ERROR("Canot erase flash: %d\r\n", err);
 	}
-}
 
-
-LOCAL void 
-_fota_write_sector() {
 	INFO("W: 0x%05X\r\n", fs.sector * FOTA_SECTOR_SIZE);
-	SpiFlashOpResult err;
-	
+	system_soft_wdt_feed();
 	err = spi_flash_write(fs.sector * FOTA_SECTOR_SIZE, 
-			(uint32_t *)&fs.recv_buffer[0], 
+			(uint32_t *)fs.recv_buffer, 
 			FOTA_SECTOR_SIZE);
 	if (err != SPI_FLASH_RESULT_OK) {
 		ERROR("Canot write flash: %d\r\n", err);
@@ -71,7 +66,7 @@ _fota_tcpclient_recv_cb(void *arg, char *pdata, unsigned short len) {
 			INFO("FOTA: Last chunk\r\n");
 			fs.ok = true;
 		}
-		_fota_task_post(FOTA_SIG_ERASE_SECTOR);
+		_fota_task_post(FOTA_SIG_WRITE_SECTOR);
 		return;
 	}
 	_fota_task_post(FOTA_SIG_GET);
@@ -135,7 +130,7 @@ LOCAL void
 _fota_proto_get_sector() {
 	int8_t err;
 	char b[24];
-	os_snprintf(b, 24, "GET 0x%06X:0x%06X;\n\0", 
+	ets_snprintf(b, 24, "GET 0x%06X:0x%06X;\n\0", 
 			fs.chunk_index * FOTA_CHUNK_SIZE, FOTA_CHUNK_SIZE); 
 	espconn_send(fs.tcpconn, b, 23); 
 }
@@ -177,11 +172,6 @@ _fota_task_cb(os_event_t *e)
 	
 	case FOTA_SIG_GET:
 		_fota_proto_get_sector();
-		break;
-
-	case FOTA_SIG_ERASE_SECTOR:
-		_fota_erase_sector();
-		_fota_task_post(FOTA_SIG_WRITE_SECTOR);
 		break;
 
 	case FOTA_SIG_WRITE_SECTOR:
@@ -240,6 +230,7 @@ fota_start() {
 	if (fs.status != FOTA_IDLE) {
 		return;
 	}
+	fs.status = FOTA_CONNECTING;
 	INFO("FOTA: Start: %s:%d Sector: %X\r\n", fs.hostname, fs.port, fs.sector);
 	return _fota_task_post(FOTA_SIG_CONNECT);
 }
@@ -263,7 +254,7 @@ fota_init(const char *hostname, uint8_t hostname_len, uint16_t port) {
 	fs.chunk_index = 0;
 	fs.ok = false;
 	//system_soft_wdt_stop();
-	wifi_fpm_close();
+	//wifi_fpm_close();
 
 	bool fp = spi_flash_erase_protect_disable();
 	if (!fp) {

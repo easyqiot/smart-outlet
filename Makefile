@@ -63,7 +63,6 @@ LINKFLAGS_eagle.app.v6 = \
 	-Wl,--start-group					\
 	-lc					\
 	-lgcc					\
-	-lhal					\
 	-lphy	\
 	-lpp	\
 	-lnet80211	\
@@ -77,9 +76,11 @@ LINKFLAGS_eagle.app.v6 = \
 	-lpwm	\
 	-ldriver \
 	-lsmartconfig \
+	-lhal					\
 	$(DEP_LIBS_eagle.app.v6)					\
 	-Wl,--end-group
 
+	
 DEPENDS_eagle.app.v6 = \
                 $(LD_FILE) \
                 $(LDDIR)/eagle.rom.addr.v6.ld
@@ -132,17 +133,20 @@ sinclude $(PDIR)Makefile
 
 .PHONY: flash flash_user2 fota
 
-ESPTOOL = esptool.py --baud 576000 write_flash --flash_size 1MB --flash_mode qio --flash_freq 40m
+ESPTOOL = esptool.py --baud 576000 write_flash -u --flash_size 1MB --flash_mode qio --flash_freq 40m
 flash:
 	 $(ESPTOOL) \
-		0x0 	../bin/boot_v1.6.bin \
+		0x0 	../bin/boot_v1.7.bin \
 		0x1000  ../bin/upgrade/user1.1024.new.2.bin \
-		0xfb000 ../bin/blank.bin \
 		0xfc000 ../bin/esp_init_data_default_v08_vdd33.bin \
+		0xfb000 ../bin/blank.bin \
 		0xfe000 ../bin/blank.bin
 
 flash_user2:
 	 $(ESPTOOL) 0x81000 ../bin/upgrade/user2.1024.new.2.bin
+
+flash_erase:
+	 $(ESPTOOL) 0x0 ../bin/blank-1mb.bin
 
 fota: 
 	python3.6 fota.py \

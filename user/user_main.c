@@ -9,6 +9,7 @@
 #include <osapi.h>
 #include <gpio.h>
 #include <mem.h>
+#include <user_interface.h>
 
 // LIB: EasyQ
 #include "easyq.h" 
@@ -185,5 +186,4 @@ void ICACHE_FLASH_ATTR user_pre_init(void)
 		while(1);
 	}
 }
-
 

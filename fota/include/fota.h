@@ -37,14 +37,13 @@
 #endif
 
 
-#define FOTA_CHUNKS_PER_SECTOR	4	
+#define FOTA_CHUNKS_PER_SECTOR	4
 
 
 enum fota_signal{
 	FOTA_SIG_CONNECT,
 	FOTA_SIG_RECONNECT,
 	FOTA_SIG_DISCONNECT,
-	FOTA_SIG_ERASE_SECTOR,
 	FOTA_SIG_WRITE_SECTOR,
 	FOTA_SIG_GET,
 	FOTA_SIG_DELETE,
@@ -74,7 +73,7 @@ struct fota_session {
 	uint64_t reconnect_ticks;
 	char * recv_buffer;
 	size_t recvbuffer_length;
-	uint16_t sector;
+	uint32_t sector;
 	uint16_t chunk_index;
 	bool ok;
 };
