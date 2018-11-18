@@ -142,6 +142,9 @@ flash:
 flash_user2:
 	 $(ESPTOOL) 0x81000 ../bin/upgrade/user2.1024.new.2.bin
 
+flash_user1:
+	 $(ESPTOOL) 0x01000 ../bin/upgrade/user1.1024.new.2.bin
+
 fota: 
 	python3.6 fota.py \
 		../bin/upgrade/user2.1024.new.2.bin bee:fota ha:1085 \

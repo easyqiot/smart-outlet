@@ -230,12 +230,12 @@ fota_init(const char* server, uint16_t server_len) {
 
 	//system_soft_wdt_stop();
 	//wifi_fpm_close();
-	//bool fp = spi_flash_erase_protect_disable();
-	//if (!fp) {
-	//	INFO("Cannot disable the flash protection\r\n");
-	//	return;
-	//}
-	//INFO("Flash protect disabled\r\n");
+	bool fp = spi_flash_erase_protect_disable();
+	if (!fp) {
+		INFO("Cannot disable the flash protection\r\n");
+		return;
+	}
+	INFO("Flash protect disabled\r\n");
 
 	INFO("FOTA: Start: %s:%d Sector: %X\r\n", server, port, fs.sector);
 	fs.server = (char *)os_zalloc(server_len + 1);
