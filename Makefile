@@ -23,7 +23,8 @@ GEN_BINS= eagle.app.v6.bin
 SPECIAL_MKTARGETS=$(APP_MKTARGETS)
 SUBDIRS=    \
 	user \
-	easyq
+	easyq \
+	fota
 
 endif # } PDIR
 
@@ -48,7 +49,8 @@ endif
 
 COMPONENTS_eagle.app.v6 = \
 	user/libuser.a  \
-	easyq/libeasyq.a 
+	easyq/libeasyq.a \
+	fota/libfota.a
 
 LINKFLAGS_eagle.app.v6 = \
 	-L../lib        \
@@ -123,7 +125,7 @@ DDEFINES +=				\
 INCLUDES := $(INCLUDES) \
 	-I $(PDIR)include \
 	-I $(PDIR)easyq/include \
-	-I $(PDIR)third_party/include
+	-I $(PDIR)fota/include 
 
 PDIR := ../$(PDIR)
 sinclude $(PDIR)Makefile
@@ -133,7 +135,7 @@ sinclude $(PDIR)Makefile
 ESPTOOL = esptool.py --baud 576000 write_flash --flash_size 1MB --flash_mode qio --flash_freq 40m
 flash:
 	 $(ESPTOOL) \
-		0x0 	../bin/boot_v1.7.bin \
+		0x0 	../bin/boot_v1.6.bin \
 		0x1000  ../bin/upgrade/user1.1024.new.2.bin \
 		0xfb000 ../bin/blank.bin \
 		0xfc000 ../bin/esp_init_data_default_v08_vdd33.bin \

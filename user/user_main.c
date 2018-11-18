@@ -59,9 +59,17 @@ easyq_message_cb(void *arg, const char *queue, const char *msg,
 	}	
 	else if (strcmp(queue, FOTA_QUEUE) == 0 && msg[0] == 'S') {
 		os_timer_disarm(&status_timer);
+		char *server = (char *)(&msg[0]+1);
+		char *colon = strrchr(server, ':');;
+		uint8_t hostname_len = (uint8_t)(colon - server);
+		uint16_t port = atoi(colon+1);
+		colon[0] = 0;	
+		
+		INFO("INIT FOTA: %s %d\r\n", server, port);
+		fota_init(server, hostname_len, port);
+
 		// TODO: decide about delete easyq ?
 		easyq_disconnect(&eq);
-		fota_init(msg+1, message_len-1);
 	}
 }
 
