@@ -8,7 +8,6 @@
 #ifndef USER_WIFI_H_
 #define USER_WIFI_H_
 #include "os_type.h"
-#include "driver/uart.h"
 
 
 typedef void (*WifiCallback)(uint8_t);

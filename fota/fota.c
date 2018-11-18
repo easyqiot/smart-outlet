@@ -26,22 +26,26 @@ LOCAL void
 _fota_write_sector() {
 	SpiFlashOpResult err;
 
-	INFO("E: 0x%05X\r\n", fs.sector * FOTA_SECTOR_SIZE);
-	system_soft_wdt_feed();
-	err = spi_flash_erase_sector((uint16_t)fs.sector);
-	if (err != SPI_FLASH_RESULT_OK) {
-		ERROR("Canot erase flash: %d\r\n", err);
-	}
+		system_soft_wdt_feed();
+		system_upgrade_erase_flash(0xFFF);
+		INFO("E: 0x%05X\r\n", fs.sector * FOTA_SECTOR_SIZE);
+	//if (fs.sector % 16 == 0) {
+	//}
+	//err = spi_flash_erase_sector((uint16_t)fs.sector);
+	//if (err != SPI_FLASH_RESULT_OK) {
+	//	ERROR("Canot erase flash: %d\r\n", err);
+	//}
 
-	INFO("W: 0x%05X\r\n", fs.sector * FOTA_SECTOR_SIZE);
 	system_soft_wdt_feed();
-	err = spi_flash_write(fs.sector * FOTA_SECTOR_SIZE, 
-			(uint32_t *)fs.recv_buffer, 
-			FOTA_SECTOR_SIZE);
-	if (err != SPI_FLASH_RESULT_OK) {
-		ERROR("Canot write flash: %d\r\n", err);
-		return;
-	}
+	system_upgrade(fs.recv_buffer, FOTA_SECTOR_SIZE);
+	INFO("W: 0x%05X\r\n", fs.sector * FOTA_SECTOR_SIZE);
+	//err = spi_flash_write(fs.sector * FOTA_SECTOR_SIZE, 
+	//		(uint32_t *)fs.recv_buffer, 
+	//		FOTA_SECTOR_SIZE);
+	//if (err != SPI_FLASH_RESULT_OK) {
+	//	ERROR("Canot write flash: %d\r\n", err);
+	//	return;
+	//}
 
 }
 
@@ -166,6 +170,7 @@ _fota_task_cb(os_event_t *e)
 		espconn_regist_recvcb(fs.tcpconn, _fota_tcpclient_recv_cb);
 		espconn_regist_disconcb(fs.tcpconn, _fota_tcpclient_disconnect_cb);
 		INFO("FOTA: Connected\r\n");
+		system_upgrade_init();
 		system_upgrade_flag_set(UPGRADE_FLAG_START);
 		_fota_task_post(FOTA_SIG_GET);
 		break;
@@ -209,7 +214,10 @@ _fota_task_cb(os_event_t *e)
 			return;
 		}
 		INFO("FOTA: finish\r\n");
+		system_soft_wdt_feed();
 		system_upgrade_flag_set(UPGRADE_FLAG_FINISH);
+		system_upgrade_deinit();
+		//system_upgrade_flag_set(UPGRADE_FLAG_IDLE);
 		INFO("REBOOTING\r\n");
 		system_upgrade_reboot();
 		break;

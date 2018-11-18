@@ -10,6 +10,7 @@
 #include <gpio.h>
 #include <mem.h>
 #include <user_interface.h>
+#include <driver/uart.h>
 
 // LIB: EasyQ
 #include "easyq.h" 
