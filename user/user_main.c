@@ -11,40 +11,70 @@
 #include <mem.h>
 #include <user_interface.h>
 #include <driver/uart.h>
+#include <upgrade.h>
 
 // LIB: EasyQ
 #include "easyq.h" 
 #include "debug.h"
 
 
-#define STATUS_INTERVAL 3000
+#define STATUS_INTERVAL 10000
 
 
 LOCAL EasyQSession eq;
 ETSTimer status_timer;
 LOCAL bool remote_enabled;
+LOCAL bool relay1_remote_status;
+LOCAL bool relay2_remote_status;
 
-
-void ICACHE_FLASH_ATTR
-status_timer_func() {
+void
+fota_report_status(const char *q) {
 	char str[50];
 	float vdd = system_get_vdd33() / 1024.0;
 
-	uint32_t userbin_addr = system_get_userbin_addr();
 	uint8_t image = system_upgrade_userbin_check();
-	os_sprintf(str, "Image: %s:0x%05X, VDD: %d.%03d Remote: %s", 
-			(UPGRADE_FW_BIN1 == image)? "user1": "user2",
-			userbin_addr,
+	os_sprintf(str, "Image: %s VDD: %d.%03d Remote: %s", 
+			(UPGRADE_FW_BIN1 == image)? "FOTA": "APP",
 			(int)vdd, 
-			(int)(vdd*1000)%1000, remote_enabled? "ON": "OFF");
-	easyq_push(&eq, STATUS_QUEUE, str);
+			(int)(vdd*1000)%1000, 
+			remote_enabled? "ON": "OFF");
+	easyq_push(&eq, q, str);
 }
 
 
 void ICACHE_FLASH_ATTR
-update_relay(uint32_t num, const char* msg) {
-	bool on = strcmp(msg, "on") == 0;
+status_timer_func() {
+	fota_report_status(STATUS_QUEUE);
+}
+
+
+void ICACHE_FLASH_ATTR
+update_relay(uint32_t num, bool on) {
 	GPIO_OUTPUT_SET(GPIO_ID_PIN(num), !on);
+}
+
+
+void ICACHE_FLASH_ATTR
+update_relays_by_remote_status() {
+	update_relay(RELAY1_NUM, relay1_remote_status);	
+	update_relay(RELAY2_NUM, relay2_remote_status);	
+}
+
+
+void ICACHE_FLASH_ATTR
+update_relay_by_message(uint32_t num, const char* msg) {
+	bool on = strcmp(msg, "on") == 0;
+	switch (num) {
+		case RELAY1_NUM:
+			relay1_remote_status = on;
+			break;
+		case RELAY2_NUM:
+			relay2_remote_status = on;
+			break;
+	}
+	if (remote_enabled) {
+		update_relays_by_remote_status();
+	}
 }
 
 
@@ -54,24 +84,22 @@ easyq_message_cb(void *arg, const char *queue, const char *msg,
 	//INFO("EASYQ: Message: %s From: %s\r\n", msg, queue);
 
 	if (strcmp(queue, RELAY1_QUEUE) == 0) { 
-		update_relay(RELAY1_NUM, msg);
+		update_relay_by_message(RELAY1_NUM, msg);
 	}
 	else if (strcmp(queue, RELAY2_QUEUE) == 0) { 
-		update_relay(RELAY2_NUM, msg);
+		update_relay_by_message(RELAY2_NUM, msg);
 	}	
-	else if (strcmp(queue, FOTA_QUEUE) == 0 && msg[0] == 'S') {
-		os_timer_disarm(&status_timer);
-		char *server = (char *)(&msg[0]+1);
-		char *colon = strrchr(server, ':');;
-		uint8_t hostname_len = (uint8_t)(colon - server);
-		uint16_t port = atoi(colon+1);
-		colon[0] = 0;	
-		
-		INFO("INIT FOTA: %s %d\r\n", server, port);
-		fota_init(server, hostname_len, port);
+	else if (strcmp(queue, FOTA_QUEUE) == 0) {
+		if (msg[0] == 'R') {
+			os_timer_disarm(&status_timer);
+			INFO("Rebooting to FOTA rom\r\n");
+			system_upgrade_flag_set(UPGRADE_FLAG_FINISH);
+			system_upgrade_reboot();
+		}
+		else if (msg[0] == 'I') {
+			fota_report_status(FOTA_STATUS_QUEUE);
+		}
 
-		// TODO: decide about delete easyq ?
-		easyq_disconnect(&eq);
 	}
 }
 
@@ -79,7 +107,8 @@ easyq_message_cb(void *arg, const char *queue, const char *msg,
 void ICACHE_FLASH_ATTR
 easyq_connect_cb(void *arg) {
 	INFO("EASYQ: Connected to %s:%d\r\n", eq.hostname, eq.port);
-	INFO("\r\n***** OTA ****\r\n");
+	INFO("\r\n***** Smart Outlet ****\r\n");
+	INFO("\r\n***** Smart Outlet ****\r\n");
     os_timer_disarm(&status_timer);
     os_timer_setfn(&status_timer, (os_timer_func_t *)status_timer_func, NULL);
     os_timer_arm(&status_timer, STATUS_INTERVAL, 1);
@@ -104,7 +133,6 @@ void easyq_disconnect_cb(void *arg)
     os_timer_disarm(&status_timer);
 	INFO("EASYQ: Disconnected from %s:%d\r\n", e->hostname, e->port);
 	easyq_delete(&eq);
-	fota_start();
 }
 
 
@@ -138,6 +166,13 @@ sw2_interrupt() {
 		INFO("REMOTE: %s\r\n", enabled? "ON": "OFF"); 
 	}
 	os_delay_us(50000);
+	if (remote_enabled) {
+		update_relays_by_remote_status();
+	}
+	else {
+		update_relay(RELAY1_NUM, true);	
+		update_relay(RELAY2_NUM, true);	
+	}
 	ETS_GPIO_INTR_ENABLE();
 }
 
@@ -156,6 +191,8 @@ void user_init(void) {
 	PIN_FUNC_SELECT(RELAY2_MUX, RELAY2_FUNC);
 	GPIO_OUTPUT_SET(GPIO_ID_PIN(RELAY1_NUM), 1);
 	GPIO_OUTPUT_SET(GPIO_ID_PIN(RELAY2_NUM), 1);
+	relay1_remote_status = false;
+	relay2_remote_status = false;
 
 	EasyQError err = easyq_init(&eq, EASYQ_HOSTNAME, EASYQ_PORT, EASYQ_LOGIN);
 	if (err != EASYQ_OK) {

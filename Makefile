@@ -23,8 +23,7 @@ GEN_BINS= eagle.app.v6.bin
 SPECIAL_MKTARGETS=$(APP_MKTARGETS)
 SUBDIRS=    \
 	user \
-	easyq \
-	fota
+	easyq
 
 endif # } PDIR
 
@@ -49,8 +48,7 @@ endif
 
 COMPONENTS_eagle.app.v6 = \
 	user/libuser.a  \
-	easyq/libeasyq.a \
-	fota/libfota.a
+	easyq/libeasyq.a
 
 LINKFLAGS_eagle.app.v6 = \
 	-L../lib        \
@@ -126,14 +124,14 @@ DDEFINES +=				\
 INCLUDES := $(INCLUDES) \
 	-I $(PDIR)include \
 	-I $(PDIR)easyq/include \
-	-I $(PDIR)fota/include 
 
 PDIR := ../$(PDIR)
 sinclude $(PDIR)Makefile
 
-.PHONY: flash flash_user2 fota
+.PHONY: flash flash_user2 flash_user1 flash_erase fota
 
-ESPTOOL = esptool.py --baud 1152000 write_flash -u --flash_size 1MB --flash_mode qio --flash_freq 40m
+ESPTOOL = esptool.py --baud 576000 write_flash -u --flash_size 1MB --flash_mode qio --flash_freq 40m
+FOTATOOL = ~/.virtualenvs/easyq/bin/python ../fota/fota.py
 flash:
 	 $(ESPTOOL) \
 		0x0 	../bin/boot_v1.7.bin \
@@ -143,16 +141,16 @@ flash:
 		0xfe000 ../bin/blank.bin
 
 flash_user2:
-	 $(ESPTOOL) 0x81000 ../bin/upgrade/user2.1024.new.2.bin
+	$(ESPTOOL) 0x81000 ../bin/upgrade/user2.1024.new.2.bin
 
 flash_user1:
-	 $(ESPTOOL) 0x01000 ../bin/upgrade/user1.1024.new.2.bin
+	$(ESPTOOL) 0x01000 ../bin/upgrade/user1.1024.new.2.bin
 
 flash_erase:
-	 $(ESPTOOL) 0x0 ../bin/blank-1mb.bin
+	$(ESPTOOL) 0x0 ../bin/blank-1mb.bin
 
 fota: 
-	python3.6 fota.py \
-		../bin/upgrade/user2.1024.new.2.bin bee:fota ha:1085 \
+	$(FOTATOOL) \
+		../bin/upgrade/user2.1024.new.2.bin bee ha:1085 \
 		-b 192.168.8.214:6666
 
