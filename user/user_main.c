@@ -18,14 +18,24 @@
 #include "debug.h"
 
 
-#define STATUS_INTERVAL 10000
-
+#define STATUS_INTERVAL		200	
+#define VERSION				"2.2.1"
 
 LOCAL EasyQSession eq;
 ETSTimer status_timer;
 LOCAL bool remote_enabled;
 LOCAL bool relay1_remote_status;
 LOCAL bool relay2_remote_status;
+LOCAL bool led_status;
+LOCAL uint32_t ticks;
+
+
+enum blink_speed {
+	BLINK_SLOW = 1,
+	BLINK_MEDIUM,
+	BLINK_FAST
+};
+
 
 void
 fota_report_status(const char *q) {
@@ -33,7 +43,7 @@ fota_report_status(const char *q) {
 	float vdd = system_get_vdd33() / 1024.0;
 
 	uint8_t image = system_upgrade_userbin_check();
-	os_sprintf(str, "Image: %s VDD: %d.%03d Remote: %s", 
+	os_sprintf(str, "Image: %s Version: "VERSION" VDD: %d.%03d Remote: %s", 
 			(UPGRADE_FW_BIN1 == image)? "FOTA": "APP",
 			(int)vdd, 
 			(int)(vdd*1000)%1000, 
@@ -42,9 +52,33 @@ fota_report_status(const char *q) {
 }
 
 
+void
+update_led(bool on) {
+	led_status = on;
+	GPIO_OUTPUT_SET(GPIO_ID_PIN(LED_NUM), !on);
+}
+
+
+void
+blink_led() {
+	update_led(!remote_enabled || !led_status);
+}
+
+
 void ICACHE_FLASH_ATTR
 status_timer_func() {
-	fota_report_status(STATUS_QUEUE);
+	ticks++;
+	blink_led();
+	if (eq.status == EASYQ_CONNECTED && ticks % 20 == 0) {
+		fota_report_status(STATUS_QUEUE);
+	}
+}
+
+
+void blink_speed(enum blink_speed n) {
+    os_timer_disarm(&status_timer);
+    os_timer_setfn(&status_timer, (os_timer_func_t *)status_timer_func, NULL);
+    os_timer_arm(&status_timer, STATUS_INTERVAL/n, 1);
 }
 
 
@@ -92,7 +126,7 @@ easyq_message_cb(void *arg, const char *queue, const char *msg,
 	else if (strcmp(queue, FOTA_QUEUE) == 0) {
 		if (msg[0] == 'R') {
 			os_timer_disarm(&status_timer);
-			INFO("Rebooting to FOTA rom\r\n");
+			INFO("Rebooting to FOTA ROM\r\n");
 			system_upgrade_flag_set(UPGRADE_FLAG_FINISH);
 			system_upgrade_reboot();
 		}
@@ -107,11 +141,8 @@ easyq_message_cb(void *arg, const char *queue, const char *msg,
 void ICACHE_FLASH_ATTR
 easyq_connect_cb(void *arg) {
 	INFO("EASYQ: Connected to %s:%d\r\n", eq.hostname, eq.port);
-	INFO("\r\n***** Smart Outlet ****\r\n");
-    os_timer_disarm(&status_timer);
-    os_timer_setfn(&status_timer, (os_timer_func_t *)status_timer_func, NULL);
-    os_timer_arm(&status_timer, STATUS_INTERVAL, 1);
-	
+	INFO("\r\n***** Smart Outlet "VERSION"****\r\n");
+	blink_speed(BLINK_SLOW);
 	const char * queues[] = {RELAY1_QUEUE, RELAY2_QUEUE, FOTA_QUEUE};
 	easyq_pull_all(&eq, queues, 3);
 }
@@ -137,8 +168,10 @@ void easyq_disconnect_cb(void *arg)
 
 void wifi_connect_cb(uint8_t status) {
     if(status == STATION_GOT_IP) {
+		blink_speed(BLINK_MEDIUM);
         easyq_connect(&eq);
     } else {
+		blink_speed(BLINK_FAST);
         easyq_disconnect(&eq);
     }
 }
@@ -193,6 +226,11 @@ void user_init(void) {
 	relay1_remote_status = false;
 	relay2_remote_status = false;
 
+	// LED
+	PIN_FUNC_SELECT(LED_MUX, LED_FUNC);
+	PIN_PULLUP_DIS(LED_MUX);
+	GPIO_OUTPUT_SET(GPIO_ID_PIN(LED_NUM), 1);
+
 	EasyQError err = easyq_init(&eq, EASYQ_HOSTNAME, EASYQ_PORT, EASYQ_LOGIN);
 	if (err != EASYQ_OK) {
 		ERROR("EASYQ INIT ERROR: %d\r\n", err);
@@ -208,7 +246,8 @@ void user_init(void) {
 	gpio_pin_intr_state_set(GPIO_ID_PIN(SW2_NUM), GPIO_PIN_INTR_ANYEDGE);
 	ETS_GPIO_INTR_ENABLE();
 	sw2_interrupt();
-
+	
+	blink_speed(BLINK_FAST);
     WIFI_Connect(WIFI_SSID, WIFI_PSK, wifi_connect_cb);
     INFO("System started ...\r\n");
 }
