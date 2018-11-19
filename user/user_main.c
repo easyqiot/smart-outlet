@@ -32,8 +32,8 @@ LOCAL uint32_t ticks;
 
 enum blink_speed {
 	BLINK_SLOW = 1,
-	BLINK_MEDIUM,
-	BLINK_FAST
+	BLINK_MEDIUM = 2,
+	BLINK_FAST = 4
 };
 
 
@@ -151,7 +151,6 @@ easyq_connect_cb(void *arg) {
 void ICACHE_FLASH_ATTR
 easyq_connection_error_cb(void *arg) {
 	EasyQSession *e = (EasyQSession*) arg;
-    os_timer_disarm(&status_timer);
 	INFO("EASYQ: Connection error: %s:%d\r\n", e->hostname, e->port);
 	INFO("EASYQ: Reconnecting to %s:%d\r\n", e->hostname, e->port);
 }
@@ -160,7 +159,6 @@ easyq_connection_error_cb(void *arg) {
 void easyq_disconnect_cb(void *arg)
 {
 	EasyQSession *e = (EasyQSession*) arg;
-    os_timer_disarm(&status_timer);
 	INFO("EASYQ: Disconnected from %s:%d\r\n", e->hostname, e->port);
 	easyq_delete(&eq);
 }
